@@ -10,8 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // Export what UniPDF needs.
@@ -205,7 +204,7 @@ func (f *font) numTablesToWrite() int {
 }
 
 func (f *font) write(w *byteWriter) error {
-	logrus.Debug("Writing font")
+	slog.Debug("Writing font")
 	numTables := f.numTablesToWrite()
 	otTable := &offsetTable{
 		sfntVersion:   f.ot.sfntVersion,
@@ -221,8 +220,8 @@ func (f *font) write(w *byteWriter) error {
 	// Starting offset after offset table and table records.
 	startOffset := int64(12 + numTables*16)
 
-	logrus.Tracef("==== write\nnumTables: %d\nstartOffset: %d", numTables, startOffset)
-	logrus.Trace("Write 2")
+	slog.Debug(fmt.Sprintf("==== write\nnumTables: %d\nstartOffset: %d", numTables, startOffset))
+	slog.Debug("Write 2")
 	// Writing is two phases and is done in a few steps:
 	// 1. Write the content tables: head, hhea, etc in the expected order and keep track of the length, checksum for each.
 	// 2. Generate the table records based on the information.
@@ -416,7 +415,7 @@ func (f *font) write(w *byteWriter) error {
 			}
 		}
 	}
-	logrus.Trace("Write 3")
+	slog.Debug("Write 3")
 
 	// Write the offset and table records to another mock buffer.
 	var bufh bytes.Buffer

@@ -6,15 +6,16 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // cvtTable represents the Control Value Table (cvt).
 // This table contains a list of values that can be referenced by instructions.
 // TODO: For subsetting/optimization it would be good to know what glyphs need each value, so non-used values can be removed.
-//       Probably part of optimization in the locations where these values are referenced.
+//
+//	Probably part of optimization in the locations where these values are referenced.
 type cvtTable struct {
-	controlValues []int16 //fword
+	controlValues []int16 // fword
 }
 
 func (f *font) parseCvt(r *byteReader) (*cvtTable, error) {
@@ -23,7 +24,7 @@ func (f *font) parseCvt(r *byteReader) (*cvtTable, error) {
 		return nil, err
 	}
 	if !has || tr == nil {
-		logrus.Debug("cvt table absent")
+		slog.Debug("cvt table absent")
 		return nil, nil
 	}
 

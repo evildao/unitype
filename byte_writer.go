@@ -8,9 +8,9 @@ package unitype
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
-
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // byteWriter encapsulates io.Writer and provides methods to write binary data as fit for truetype fonts.
@@ -53,9 +53,9 @@ func (w *byteWriter) checksum() uint32 {
 	data := w.buffer.Bytes()
 
 	if len(data) < 60 {
-		logrus.Debugf("Data: % X", data)
+		slog.Debug(fmt.Sprintf("Data: % X", data))
 	}
-	logrus.Debugf("Data length: %d", len(data))
+	slog.Debug(fmt.Sprintf("Data length: %d", len(data)))
 	sum = 0
 
 	for i := 0; i < len(data); i += 4 {
@@ -136,7 +136,7 @@ func (w *byteWriter) writeSlice(slice interface{}) error {
 		}
 
 	default:
-		logrus.Errorf("Write type check error: %T (slice)", t)
+		slog.Error(fmt.Sprintf("Write type check error: %T (slice)", t))
 		return errTypeCheck
 	}
 	return nil
@@ -203,7 +203,7 @@ func (w *byteWriter) write(fields ...interface{}) error {
 			}
 
 		default:
-			logrus.Errorf("Write type check error: %T", t)
+			slog.Error(fmt.Sprintf("Write type check error: %T", t))
 			return errTypeCheck
 		}
 	}

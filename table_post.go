@@ -7,20 +7,19 @@ package unitype
 
 import (
 	"errors"
-
-	"github.com/sirupsen/logrus"
+	"fmt"
+	"log/slog"
 )
 
 // postTable represents a PostScript (post) table.
 // This table contains additional information needed for use on PostScript printers.
 // Includes FontInfo dictionary entries and the PostScript names of all glyphs.
 //
-// - version 1.0 is used the font file contains exactly the 258 glyphs in the standard Macintosh TrueType font file.
-//   Glyph list on: https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6post.html
-// - version 2.0 is used for fonts that contain some glyphs not in the standard set or have different ordering.
-// - version 2.5 can handle nonstandard ordering of the standard mac glyphs via offsets.
-// - other versions do not contain post glyph name data.
-//
+//   - version 1.0 is used the font file contains exactly the 258 glyphs in the standard Macintosh TrueType font file.
+//     Glyph list on: https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6post.html
+//   - version 2.0 is used for fonts that contain some glyphs not in the standard set or have different ordering.
+//   - version 2.5 can handle nonstandard ordering of the standard mac glyphs via offsets.
+//   - other versions do not contain post glyph name data.
 type postTable struct {
 	// header (all versions).
 	version            fixed
@@ -52,11 +51,11 @@ type postTable struct {
 */
 
 func (f *font) parsePost(r *byteReader) (*postTable, error) {
-	logrus.Debug("Parsing post table")
+	slog.Debug("Parsing post table")
 	if f.maxp == nil {
 		// maxp table required for numGlyphs check. Could probably be omitted, can consider
 		// if run into those cases where post is present and maxp is not (and all other information present).
-		logrus.Debug("Required maxp table missing")
+		slog.Debug("Required maxp table missing")
 		return nil, errRequiredField
 	}
 
@@ -65,7 +64,7 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 		return nil, err
 	}
 	if !has {
-		logrus.Debug("Post table not present")
+		slog.Debug("Post table not present")
 		return nil, nil
 	}
 
@@ -81,11 +80,11 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 		return nil, err
 	}
 
-	logrus.Debugf("Version: %v %v 0x%X", t.version, t.version.Float64(), t.version)
+	slog.Debug(fmt.Sprintf("Version: %v %v 0x%X", t.version, t.version.Float64(), t.version))
 	switch uint32(t.version) {
 	case 0x00010000: // 1.0 - font files contains exactly the 258 standard Macintosh glyphs.
 		if t.numGlyphs != 258 {
-			logrus.Debug("Should have the mac number of glyph names")
+			slog.Debug("Should have the mac number of glyph names")
 			// TODO(gunnsth): If this is too strict, can just set the first 258 glyphnames.
 			return nil, errRangeCheck
 		}
@@ -95,14 +94,14 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 		}
 
 	case 0x00020000: // 2.0
-		logrus.Trace("Version: 2.0")
+		slog.Debug("Version: 2.0")
 		err = r.read(&t.numGlyphs)
 		if err != nil {
 			return nil, err
 		}
-		logrus.Debugf("numGlyphs: %d", t.numGlyphs)
+		slog.Debug(fmt.Sprintf("numGlyphs: %d", t.numGlyphs))
 		if t.numGlyphs != f.maxp.numGlyphs {
-			logrus.Debugf("post numGlyphs != maxp.numGlyphs (%d != %d)", t.numGlyphs, f.maxp.numGlyphs)
+			slog.Debug(fmt.Sprintf("post numGlyphs != maxp.numGlyphs (%d != %d)", t.numGlyphs, f.maxp.numGlyphs))
 			return nil, errRangeCheck
 		}
 		err = r.readSlice(&t.glyphNameIndex, int(t.numGlyphs))
@@ -115,12 +114,12 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 				newGlyphs++
 			}
 		}
-		logrus.Tracef("newGlyphs: %d", newGlyphs)
+		slog.Debug(fmt.Sprintf("newGlyphs: %d", newGlyphs))
 		var names []string
 		for i := 0; i < newGlyphs; i++ {
 			if r.Offset()-start >= int64(tr.length) {
-				logrus.Debug("ERROR: Reading outside post table")
-				logrus.Debugf("%d > %d", r.Offset()-start, tr.length)
+				slog.Debug("ERROR: Reading outside post table")
+				slog.Debug(fmt.Sprintf("%d > %d", r.Offset()-start, tr.length))
 				return nil, errors.New("reading outside table")
 			}
 			var numChars int8
@@ -135,14 +134,14 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 			name := make([]byte, numChars)
 			err = r.readBytes(&name, int(numChars))
 			if err != nil {
-				logrus.Debugf("ERROR: %v", err)
+				slog.Debug(fmt.Sprintf("ERROR: %v", err))
 				return nil, err
 			}
 
 			names = append(names, string(name))
 		}
 		if len(names) != newGlyphs {
-			logrus.Debugf("newGlyphs != len(names) (%d != %d)", len(names), newGlyphs)
+			slog.Debug(fmt.Sprintf("newGlyphs != len(names) (%d != %d)", len(names), newGlyphs))
 			return nil, errors.New("mismatching number of names loaded")
 		}
 
@@ -156,25 +155,25 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 			} else if ni <= 32767 {
 				ni -= 258
 				if int(ni) >= len(names) {
-					logrus.Debugf("ERROR: Glyph %d referring to outside name list (%d)", i, ni)
+					slog.Debug(fmt.Sprintf("ERROR: Glyph %d referring to outside name list (%d)", i, ni))
 					// Let's be strict initially and slack if we find that it is needed.
 					return nil, errRangeCheck
 				}
 				name = GlyphName(names[ni])
 			}
-			logrus.Tracef("GID %d -> '%s'", i, name)
+			slog.Debug(fmt.Sprintf("GID %d -> '%s'", i, name))
 			t.glyphNames[i] = name
 		}
-		logrus.Debugf("len(names) = %d", len(names))
+		slog.Debug(fmt.Sprintf("len(names) = %d", len(names)))
 
 	case 0x00025000: // 2.5
-		logrus.Trace("Version: 2.5")
+		slog.Debug("Version: 2.5")
 		err = r.read(&t.numGlyphs)
 		if err != nil {
 			return nil, err
 		}
 		if t.numGlyphs != f.maxp.numGlyphs {
-			logrus.Debugf("post numGlyphs != maxp.numGlyphs (%d != %d)", t.numGlyphs, f.maxp.numGlyphs)
+			slog.Debug(fmt.Sprintf("post numGlyphs != maxp.numGlyphs (%d != %d)", t.numGlyphs, f.maxp.numGlyphs))
 			return nil, errRangeCheck
 		}
 		err = r.readSlice(&t.offsets, int(t.numGlyphs))
@@ -185,17 +184,17 @@ func (f *font) parsePost(r *byteReader) (*postTable, error) {
 		for i := 0; i < int(t.numGlyphs); i++ {
 			nameIndex := i + 1 + int(t.offsets[i])
 			if nameIndex < 0 || nameIndex > 257 {
-				logrus.Debugf("ERROR: name index outside range (%d)", nameIndex)
+				slog.Debug(fmt.Sprintf("ERROR: name index outside range (%d)", nameIndex))
 				continue
 			}
 			t.glyphNames[i] = macGlyphNames[nameIndex]
-			logrus.Tracef("2.5 I: %d -> %s", i, t.glyphNames[i])
+			slog.Debug(fmt.Sprintf("2.5 I: %d -> %s", i, t.glyphNames[i]))
 		}
 
 	case 0x00030000: // 3.0
-		logrus.Debug("Version 3.0 - no postscript data")
+		slog.Debug("Version 3.0 - no postscript data")
 	default:
-		logrus.Debugf("Unsupported version of post (%d) - no post data loaded", t.version)
+		slog.Debug(fmt.Sprintf("Unsupported version of post (%d) - no post data loaded", t.version))
 	}
 
 	return t, nil

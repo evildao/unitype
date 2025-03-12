@@ -6,7 +6,7 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // prepTable represents a Control Value Program table (prep).
@@ -24,7 +24,7 @@ func (f *font) parsePrep(r *byteReader) (*prepTable, error) {
 		return nil, err
 	}
 	if !has || tr == nil {
-		logrus.Debug("prep table absent")
+		slog.Debug("prep table absent")
 		return nil, nil
 	}
 

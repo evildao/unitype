@@ -8,29 +8,29 @@ package unitype
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
-
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // validate font data model `f` in `r`. Checks if required tables are present and whether
 // table checksums are correct.
 func (f *font) validate(r *byteReader) error {
 	if f.trec == nil {
-		logrus.Debug("Table records missing")
+		slog.Debug("Table records missing")
 		return errRequiredField
 	}
 	if f.ot == nil {
-		logrus.Debug("Offsets table missing")
+		slog.Debug("Offsets table missing")
 		return errRequiredField
 	}
 	if f.head == nil {
-		logrus.Debug("head table missing")
+		slog.Debug("head table missing")
 		return errRequiredField
 	}
 
 	// Validate the font.
-	logrus.Debug("Validating entire font")
+	slog.Debug("Validating entire font")
 	{
 		err := r.SeekTo(0)
 		if err != nil {
@@ -47,7 +47,7 @@ func (f *font) validate(r *byteReader) error {
 
 		headRec, ok := f.trec.trMap["head"]
 		if !ok {
-			logrus.Debug("head not set")
+			slog.Debug("head not set")
 			return errRequiredField
 		}
 		hoff := headRec.offset
@@ -69,31 +69,31 @@ func (f *font) validate(r *byteReader) error {
 	}
 
 	// Validate each table.
-	logrus.Debug("Validating font tables")
+	slog.Debug("Validating font tables")
 	for _, tr := range f.trec.list {
-		logrus.Debugf("Validating %s", tr.tableTag.String())
-		logrus.Debugf("%+v", tr)
+		slog.Debug(fmt.Sprintf("Validating %s", tr.tableTag.String()))
+		slog.Debug(fmt.Sprintf("%+v", tr))
 
 		bw := newByteWriter(&bytes.Buffer{})
 
 		if tr.offset < 0 || tr.length < 0 {
-			logrus.Debug("Range check error")
+			slog.Debug("Range check error")
 			return errRangeCheck
 		}
 
-		logrus.Debugf("Seeking to %d, to read %d bytes", tr.offset, tr.length)
+		slog.Debug(fmt.Sprintf("Seeking to %d, to read %d bytes", tr.offset, tr.length))
 		err := r.SeekTo(int64(tr.offset))
 		if err != nil {
 			return err
 		}
-		logrus.Debugf("Offset: %d", r.Offset())
+		slog.Debug(fmt.Sprintf("Offset: %d", r.Offset()))
 
 		b := make([]byte, tr.length)
 		_, err = io.ReadFull(r.reader, b)
 		if err != nil {
 			return err
 		}
-		logrus.Debugf("Read (%d)", len(b))
+		slog.Debug(fmt.Sprintf("Read (%d)", len(b)))
 		// TODO(gunnsth): Validate head.
 		if tr.tableTag.String() == "head" {
 			// Set the checksumAdjustment to 0 so that head checksum is valid.
@@ -110,12 +110,12 @@ func (f *font) validate(r *byteReader) error {
 
 		checksum := bw.checksum()
 		if tr.checksum != checksum {
-			logrus.Debugf("Invalid checksum (%d != %d)", checksum, tr.checksum)
+			slog.Debug(fmt.Sprintf("Invalid checksum (%d != %d)", checksum, tr.checksum))
 			return errors.New("checksum incorrect")
 		}
 
 		if int(tr.length) != bw.bufferedLen() {
-			logrus.Debug("Length mismatch")
+			slog.Debug("Length mismatch")
 			return errRangeCheck
 		}
 	}

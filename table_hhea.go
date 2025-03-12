@@ -6,7 +6,7 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // hheaTable represents the horizontal header table (hhea).
@@ -35,7 +35,7 @@ func (f *font) parseHhea(r *byteReader) (*hheaTable, error) {
 		return nil, err
 	}
 	if !has {
-		logrus.Debug("hhea table absent")
+		slog.Debug("hhea table absent")
 		return nil, nil
 	}
 
@@ -71,7 +71,7 @@ func (f *font) parseHhea(r *byteReader) (*hheaTable, error) {
 
 func (f *font) writeHhea(w *byteWriter) error {
 	if f.hhea == nil {
-		logrus.Debug("hhea is nil - nothing to write")
+		slog.Debug("hhea is nil - nothing to write")
 		return nil
 	}
 

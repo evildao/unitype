@@ -9,8 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // cmapTable represents a Character to Glyph Index Mapping Table (cmap).
@@ -37,7 +36,7 @@ type encodingRecord struct {
 
 func (f *font) parseCmap(r *byteReader) (*cmapTable, error) {
 	if f.maxp == nil {
-		logrus.Debug("Unable to load cmap: maxp table is nil")
+		slog.Debug("Unable to load cmap: maxp table is nil")
 		return nil, errRequiredField
 	}
 
@@ -46,7 +45,7 @@ func (f *font) parseCmap(r *byteReader) (*cmapTable, error) {
 		return nil, err
 	}
 	if !has {
-		logrus.Debug("cmap table absent")
+		slog.Debug("cmap table absent")
 		return nil, nil
 	}
 
@@ -81,7 +80,7 @@ func (f *font) parseCmap(r *byteReader) (*cmapTable, error) {
 			return nil, err
 		}
 
-		logrus.Debugf("Format: %d", format)
+		slog.Debug(fmt.Sprintf("Format: %d", format))
 		var cmap *cmapSubtable
 		switch format {
 		case 0:
@@ -93,18 +92,18 @@ func (f *font) parseCmap(r *byteReader) (*cmapTable, error) {
 		case 12:
 			cmap, err = f.parseCmapSubtableFormat12(r, int(enc.platformID), int(enc.encodingID))
 		default:
-			logrus.Debugf("Unsupported cmap format %d", format)
+			slog.Debug(fmt.Sprintf("Unsupported cmap format %d", format))
 			continue
 		}
 		if err != nil {
-			logrus.Debugf("Error: %v", err)
+			slog.Debug(fmt.Sprintf("Error: %v", err))
 			return nil, err
 		}
 		if cmap != nil {
 			key := fmt.Sprintf("%d,%d,%d", format, enc.platformID, enc.encodingID)
 			t.subtables[key] = cmap
 			t.subtableKeys = append(t.subtableKeys, key)
-			logrus.Debugf("KEY: %s <-> %T", key, cmap.ctx)
+			slog.Debug(fmt.Sprintf("KEY: %s <-> %T", key, cmap.ctx))
 		}
 	}
 
@@ -227,7 +226,7 @@ type cmapSubtableFormat4 struct {
 }
 
 func (f *font) parseCmapSubtableFormat4(r *byteReader, platformID, encodingID int) (*cmapSubtable, error) {
-	//refStart := r.Offset()
+	// refStart := r.Offset()
 	st := cmapSubtableFormat4{}
 	err := r.read(&st.length, &st.language, &st.segCountX2, &st.searchRange, &st.entrySelector, &st.rangeShift)
 	if err != nil {
@@ -260,9 +259,9 @@ func (f *font) parseCmapSubtableFormat4(r *byteReader, platformID, encodingID in
 	}
 
 	glyphIDArrLen := int(st.length-uint16(2*8+2*4*segCount)) / 2
-	logrus.Debugf("Parsing cmap format 4, segCount: %d", segCount)
-	logrus.Debugf("Table len: %d", st.length)
-	logrus.Debugf("glyphIDArrLen: %d", glyphIDArrLen)
+	slog.Debug(fmt.Sprintf("Parsing cmap format 4, segCount: %d", segCount))
+	slog.Debug(fmt.Sprintf("Table len: %d", st.length))
+	slog.Debug(fmt.Sprintf("glyphIDArrLen: %d", glyphIDArrLen))
 	if glyphIDArrLen < 0 {
 		return nil, errors.New("invalid length")
 	}
@@ -278,14 +277,14 @@ func (f *font) parseCmapSubtableFormat4(r *byteReader, platformID, encodingID in
 	runes := make([]rune, int(f.maxp.numGlyphs))
 	charcodes := make([]CharCode, int(f.maxp.numGlyphs))
 	charcodeMap := make(map[CharCode]GlyphIndex, f.maxp.numGlyphs)
-	logrus.Debugf("Number of glyphs in font: %d\n", f.maxp.numGlyphs)
+	slog.Debug(fmt.Sprintf("Number of glyphs in font: %d\n", f.maxp.numGlyphs))
 	for i := 0; i < segCount-1; i++ {
 		c1 := st.startCode[i]
 		c2 := st.endCode[i]
 		d := st.idDelta[i]
 		rangeOffset := st.idRangeOffset[i]
 
-		logrus.Debugf("Segment %d/%d, c1: %d, c2: %d, d: %d, rangeOffset: %d", i+1, segCount, c1, c2, d, rangeOffset)
+		slog.Debug(fmt.Sprintf("Segment %d/%d, c1: %d, c2: %d, d: %d, rangeOffset: %d", i+1, segCount, c1, c2, d, rangeOffset))
 
 		for c := c1; c <= c2; c++ {
 			var gid uint16
@@ -296,8 +295,8 @@ func (f *font) parseCmapSubtableFormat4(r *byteReader, platformID, encodingID in
 				index := int(rangeOffset/2 + (c - c1) + uint16(i) - uint16(len(st.idRangeOffset)))
 
 				if index >= len(st.glyphIDArray) {
-					logrus.Debugf("c1=%d c=%d c2=%d", c1, c, c2)
-					logrus.Debugf("ERROR: index outside bounds (%d/%d)", index, len(st.glyphIDArray))
+					slog.Debug(fmt.Sprintf("c1=%d c=%d c2=%d", c1, c, c2))
+					slog.Debug(fmt.Sprintf("ERROR: index outside bounds (%d/%d)", index, len(st.glyphIDArray)))
 					return nil, errors.New("outside bounds")
 				}
 				if st.glyphIDArray[index] != 0 {
@@ -307,13 +306,13 @@ func (f *font) parseCmapSubtableFormat4(r *byteReader, platformID, encodingID in
 				}
 			}
 
-			logrus.Tracef("Charcode:GID - %d:%d", c, gid)
+			slog.Debug(fmt.Sprintf("Charcode:GID - %d:%d", c, gid))
 
 			if gid > 0 {
 				b := runeDecoder.ToBytes(uint32(c))
 				r := runeDecoder.DecodeRune(b)
 				if int(gid) >= int(f.maxp.numGlyphs) {
-					logrus.Debugf("ERROR: gid > numGlyphs (%d > %d)", gid, f.maxp.numGlyphs)
+					slog.Debug(fmt.Sprintf("ERROR: gid > numGlyphs (%d > %d)", gid, f.maxp.numGlyphs))
 					return nil, errors.New("gid out of range")
 				}
 				runes[int(gid)] = r
@@ -471,7 +470,7 @@ func (f *font) parseCmapSubtableFormat12(r *byteReader, platformID, encodingID i
 	st := cmapSubtableFormat12{}
 	err := r.read(&st.reserved, &st.length, &st.language, &st.numGroups)
 	if err != nil {
-		logrus.Debugf("Error: %v", err)
+		slog.Debug(fmt.Sprintf("Error: %v", err))
 		return nil, err
 	}
 
@@ -479,7 +478,7 @@ func (f *font) parseCmapSubtableFormat12(r *byteReader, platformID, encodingID i
 		var group sequentialMapGroup
 		err = r.read(&group.startCharCode, &group.endCharCode, &group.startGlyphID)
 		if err != nil {
-			logrus.Debugf("Error: %v", err)
+			slog.Debug(fmt.Sprintf("Error: %v", err))
 			return nil, err
 		}
 		st.groups = append(st.groups, group)
@@ -495,8 +494,8 @@ func (f *font) parseCmapSubtableFormat12(r *byteReader, platformID, encodingID i
 	for _, group := range st.groups {
 		gid := GlyphIndex(group.startGlyphID)
 		if int(gid) >= int(f.maxp.numGlyphs) {
-			logrus.Debugf("gid >= numGlyphs (%d > %d)", gid, f.maxp.numGlyphs)
-			logrus.Debugf("Error: %v", errRangeCheck)
+			slog.Debug(fmt.Sprintf("gid >= numGlyphs (%d > %d)", gid, f.maxp.numGlyphs))
+			slog.Debug(fmt.Sprintf("Error: %v", errRangeCheck))
 			return nil, errRangeCheck
 		}
 		for charcode := group.startCharCode; charcode <= group.endCharCode; charcode++ {
@@ -541,7 +540,7 @@ func writeCmapSubtableFormat12(subtable *cmapSubtable, w *byteWriter) error {
 	}
 
 	for _, group := range subt.groups {
-		logrus.Tracef("XXX Write, startCharcode: %d, endCharCode: %d, startGlyphID: %d", group.startCharCode, group.endCharCode, group.startGlyphID)
+		slog.Debug(fmt.Sprintf("XXX Write, startCharcode: %d, endCharCode: %d, startGlyphID: %d", group.startCharCode, group.endCharCode, group.startGlyphID))
 		err = w.write(group.startCharCode, group.endCharCode, group.startGlyphID)
 		if err != nil {
 			return err

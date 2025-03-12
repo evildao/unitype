@@ -6,7 +6,7 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // maxpTable represents the Maximum Profile (maxp) table.
@@ -38,7 +38,7 @@ func (f *font) parseMaxp(r *byteReader) (*maxpTable, error) {
 		return nil, err
 	}
 	if !has {
-		logrus.Debug("maxp table not present")
+		slog.Debug("maxp table not present")
 		return nil, nil
 	}
 
@@ -50,7 +50,7 @@ func (f *font) parseMaxp(r *byteReader) (*maxpTable, error) {
 	}
 
 	if t.version < 0x00010000 {
-		logrus.Debug("Range check error")
+		slog.Debug("Range check error")
 		return nil, errRangeCheck
 	}
 
@@ -78,7 +78,7 @@ func (f *font) writeMaxp(w *byteWriter) error {
 	}
 
 	if t.version < 0x00010000 {
-		logrus.Debug("Range check error")
+		slog.Debug("Range check error")
 		return errRangeCheck
 	}
 

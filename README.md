@@ -1,3 +1,14 @@
+
+fork form github.com/unidoc/unitype
+
+1、删除了测试用例
+2、调整log库为slog
+3、重写subset，原库未实现这个方法
+
+我想要实现能够精准截取指定字，并生成一个较小的ttf字体文件，用于嵌入式等场景使用，源库虽然能够截取，但只能实现从前到后的截取，文件中依旧会存在大量无用字体数据
+本库实现了subset方法，能够精准截取传入字符，并删除一切不相关的字库表数据，以求最精简字库文件生成
+
+
 # UniType - truetype font library for golang.
 This library is designed for parsing and editing truetype fonts.
 Useful along with UniPDF for subsetting fonts for use in PDF files.

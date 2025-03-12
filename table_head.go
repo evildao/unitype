@@ -7,8 +7,8 @@ package unitype
 
 import (
 	"errors"
-
-	"github.com/sirupsen/logrus"
+	"fmt"
+	"log/slog"
 )
 
 // Font header.
@@ -57,7 +57,7 @@ func (f *font) parseHead(r *byteReader) (*headTable, error) {
 		return nil, err
 	}
 	if t.magicNumber != 0x5F0F3CF5 {
-		logrus.Debugf("Error: got magic number 0x%X", t.magicNumber)
+		slog.Debug(fmt.Sprintf("Error: got magic number 0x%X", t.magicNumber))
 		return nil, errors.New("magic number mismatch")
 	}
 

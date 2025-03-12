@@ -6,7 +6,7 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // fpgmTable represents font program instructions and is needed by fonts that are instructed.
@@ -20,7 +20,7 @@ func (f *font) parseFpgm(r *byteReader) (*fpgmTable, error) {
 		return nil, err
 	}
 	if !has || tr == nil {
-		logrus.Debug("fpgm table absent")
+		slog.Debug("fpgm table absent")
 		return nil, nil
 	}
 

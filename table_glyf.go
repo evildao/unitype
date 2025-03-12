@@ -8,8 +8,8 @@ package unitype
 import (
 	"bytes"
 	"errors"
-
-	"github.com/sirupsen/logrus"
+	"fmt"
+	"log/slog"
 )
 
 // glyfTable represents the Glyph Data table (glyf).
@@ -32,13 +32,13 @@ type glyfTable struct {
 
 func (f *font) parseGlyf(r *byteReader) (*glyfTable, error) {
 	if f.maxp == nil || f.loca == nil {
-		logrus.Debug("required field missing (glyf)")
+		slog.Debug("required field missing (glyf)")
 		return nil, errRequiredField
 	}
 
 	tr, has, err := f.seekToTable(r, "glyf")
 	if err != nil {
-		logrus.Debugf("ERROR: %v", err)
+		slog.Debug(fmt.Sprintf("ERROR: %v", err))
 		return nil, err
 	}
 	if !has {
@@ -47,27 +47,27 @@ func (f *font) parseGlyf(r *byteReader) (*glyfTable, error) {
 
 	glyf := &glyfTable{}
 
-	logrus.Debug("parsing glyfs")
-	logrus.Debugf("Number of glyphs: %d", f.maxp.numGlyphs)
-	logrus.Debugf("Loca offset format: %d", f.head.indexToLocFormat)
+	slog.Debug("parsing glyfs")
+	slog.Debug(fmt.Sprintf("Number of glyphs: %d", f.maxp.numGlyphs))
+	slog.Debug(fmt.Sprintf("Loca offset format: %d", f.head.indexToLocFormat))
 
 	for i := 0; i < int(f.maxp.numGlyphs); i++ {
 		gid := GlyphIndex(i)
 		gdOffset, gdLen, err := f.GetGlyphDataOffset(gid)
 		if err != nil {
-			logrus.Debugf("ERROR: %v", err)
+			slog.Debug(fmt.Sprintf("ERROR: %v", err))
 			return nil, err
 		}
 
 		if gdOffset > int64(tr.length) {
-			logrus.Debugf("gid: %d, gdOffset: %d, tr len: %d, gd len: %d", gid, gdOffset, tr.length, gdLen)
-			logrus.Debugf("Range check error (glyf): %d > %d", gdOffset, tr.length)
+			slog.Debug(fmt.Sprintf("gid: %d, gdOffset: %d, tr len: %d, gd len: %d", gid, gdOffset, tr.length, gdLen))
+			slog.Debug(fmt.Sprintf("Range check error (glyf): %d > %d", gdOffset, tr.length))
 			return nil, errRangeCheck
 		}
 
 		err = r.SeekTo(int64(tr.offset) + gdOffset)
 		if err != nil {
-			logrus.Debugf("ERROR: %v", err)
+			slog.Debug(fmt.Sprintf("ERROR: %v", err))
 			return nil, err
 		}
 
@@ -75,7 +75,7 @@ func (f *font) parseGlyf(r *byteReader) (*glyfTable, error) {
 		desc.raw = make([]byte, gdLen)
 		err = r.readBytes(&desc.raw, int(gdLen))
 		if err != nil {
-			logrus.Debugf("ERROR: %v", err)
+			slog.Debug(fmt.Sprintf("ERROR: %v", err))
 			return nil, err
 		}
 		glyf.descs = append(glyf.descs, &desc)
@@ -109,8 +109,8 @@ func (gd *glyphDescription) parse() error {
 	r := newByteReader(bytes.NewReader(gd.raw))
 	err := gd.parseHeader(r)
 	if err != nil {
-		logrus.Debugf("ERROR parsing header: %v", err)
-		logrus.Debugf("Raw data: %d bytes", len(gd.raw))
+		slog.Debug(fmt.Sprintf("ERROR parsing header: %v", err))
+		slog.Debug(fmt.Sprintf("Raw data: %d bytes", len(gd.raw)))
 		return err
 	}
 
@@ -189,12 +189,12 @@ func (gd *glyphDescription) parseComposite(r *byteReader) error {
 	if instructionsFollow {
 		instructionLen := int64(len(gd.raw)) - r.Offset()
 		if instructionLen <= 0 {
-			logrus.Debug("Read more than length in loca table showed")
+			slog.Debug("Read more than length in loca table showed")
 			return errors.New("no room for instructions")
 		}
 		err := r.readSlice(&composite.instructions, int(instructionLen))
 		if err != nil {
-			logrus.Debug("Failed to read instructions")
+			slog.Debug("Failed to read instructions")
 			return err
 		}
 	}
@@ -246,7 +246,7 @@ func (f compositeGlyphFlag) IsSet(flag compositeGlyphFlag) bool {
 // Returns list of glyphs that `gid` depends on (other than itself).
 func (glyf *glyfTable) GetComponents(gid GlyphIndex) ([]GlyphIndex, error) {
 	if int(gid) >= len(glyf.descs) {
-		logrus.Debugf("GID not accessible (%d > %d)", gid, len(glyf.descs))
+		slog.Debug(fmt.Sprintf("GID not accessible (%d > %d)", gid, len(glyf.descs)))
 		return nil, nil
 	}
 
@@ -260,7 +260,7 @@ func (glyf *glyfTable) GetComponents(gid GlyphIndex) ([]GlyphIndex, error) {
 		}
 		err := gdesc.parse()
 		if err != nil {
-			logrus.Debugf("ERROR parsing header: %v", err)
+			slog.Debug(fmt.Sprintf("ERROR parsing header: %v", err))
 			return nil, err
 		}
 	}
@@ -269,7 +269,7 @@ func (glyf *glyfTable) GetComponents(gid GlyphIndex) ([]GlyphIndex, error) {
 		return components, nil
 	}
 	if gdesc.composite == nil {
-		logrus.Debugf("composite is nil")
+		slog.Debug("composite is nil")
 		return components, nil
 	}
 
@@ -284,7 +284,7 @@ func (gd glyphDescription) IsSimple() bool {
 	if gd.header == nil {
 		err := gd.parse()
 		if err != nil {
-			logrus.Debugf("ERROR parsing header: %v", err)
+			slog.Debug(fmt.Sprintf("ERROR parsing header: %v", err))
 			return true
 		}
 	}
@@ -294,12 +294,12 @@ func (gd glyphDescription) IsSimple() bool {
 
 func (f *font) writeGlyf(w *byteWriter) error {
 	if f.glyf == nil || f.maxp == nil || f.loca == nil {
-		logrus.Debugf("glyf: required field missing (write)")
+		slog.Debug(fmt.Sprintf("glyf: required field missing (write)"))
 		return errRequiredField
 	}
 
 	if int(f.maxp.numGlyphs) != len(f.glyf.descs) {
-		logrus.Debugf("Incorrect number of glyph descriptions")
+		slog.Debug(fmt.Sprintf("Incorrect number of glyph descriptions"))
 		return errRangeCheck
 	}
 
@@ -318,12 +318,12 @@ func (f *font) writeGlyf(w *byteWriter) error {
 /*
 func (f *font) writeGlyf(w *byteWriter) error {
 	if f.glyf == nil || f.maxp == nil || f.loca == nil {
-		logrus.Debug("glyf: required field missing (write)")
+		slog.Debug("glyf: required field missing (write)")
 		return errRequiredField
 	}
 
 	if int(f.maxp.numGlyphs) != len(f.glyf.descs) {
-		logrus.Debug("Incorrect number of glyph descriptions")
+		slog.Debug("Incorrect number of glyph descriptions")
 		return errRangeCheck
 	}
 
@@ -361,10 +361,10 @@ func (f *font) parseGlyphDescription(r *byteReader, gdLen int64) (*glyphDescript
 	if err != nil {
 		return nil, err
 	}
-	logrus.Tracef("gh: %+v", gh)
+	slog.Debugf("gh: %+v", gh)
 
 	if gh.numberOfContours >= 0 {
-		logrus.Tracef("simple glyph data, contours: %d", gh.numberOfContours)
+		slog.Debugf("simple glyph data, contours: %d", gh.numberOfContours)
 		// Simple glyph.
 		sgd, err := f.parseSimpleGlyphDescription(r, int(gh.numberOfContours))
 		if err != nil {
@@ -377,7 +377,7 @@ func (f *font) parseGlyphDescription(r *byteReader, gdLen int64) (*glyphDescript
 		}, nil
 	}
 
-	logrus.Trace("composite glyph data")
+	slog.Debug("composite glyph data")
 	// Composite/compound glyph.
 	cgd, err := f.parseCompositeGlyphDescription(r, gdLen)
 	if err != nil {
@@ -485,7 +485,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 	}
 
 	if f.loca == nil {
-		logrus.Debug("loca not set")
+		slog.Debug("loca not set")
 		return nil, errRequiredField
 	}
 
@@ -508,7 +508,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 	// total number of points (all contours).
 	numPoints := int(d.endPtsOfContours[numContours-1]) + 1
 
-	logrus.Trace("GID data - Number of points: %d", numPoints)
+	slog.Debug("GID data - Number of points: %d", numPoints)
 
 	// flags (one for each point).
 	numFlags := 0
@@ -518,7 +518,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 		if err != nil {
 			return nil, err
 		}
-		logrus.Trace("flag: %d (%s)", flag, simpleGlyphFlag(flag).String())
+		slog.Debug("flag: %d (%s)", flag, simpleGlyphFlag(flag).String())
 
 		d.flags = append(d.flags, flag)
 		numFlags++
@@ -530,7 +530,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 			if err != nil {
 				return nil, err
 			}
-			logrus.Trace("Repeats: %d", repeats)
+			slog.Debug("Repeats: %d", repeats)
 			for i := 0; i < int(repeats); i++ {
 				d.flags = append(d.flags, flag)
 				numFlags++
@@ -538,15 +538,15 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 		}
 	}
 	if numFlags != numPoints {
-		logrus.Debug("Number of flags != number of points (%d != %d)", numFlags, numPoints)
+		slog.Debug("Number of flags != number of points (%d != %d)", numFlags, numPoints)
 		return nil, errors.New("numflags != numpoints")
 	}
-	logrus.Trace("Number of flags: %d", numFlags)
-	logrus.Trace("Flags: % d\n", d.flags)
-	logrus.Trace("@Offset: %d", r.Offset())
+	slog.Debug("Number of flags: %d", numFlags)
+	slog.Debug("Flags: % d\n", d.flags)
+	slog.Debug("@Offset: %d", r.Offset())
 
 	// x coordinates.
-	logrus.Trace("X Coordinates")
+	slog.Debug("X Coordinates")
 	var xLast uint16
 	for _, flag := range d.flags {
 		sflag := simpleGlyphFlag(flag)
@@ -556,12 +556,12 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 			if err != nil {
 				return nil, err
 			}
-			logrus.Trace("Short data - x=%d", x)
+			slog.Debug("Short data - x=%d", x)
 			d.xCoordinates = append(d.xCoordinates, uint16(x))
 			xLast = uint16(x)
 		} else {
 			if sflag&xIsSameOrPositiveVector != 0 {
-				logrus.Trace("Long data - same as last")
+				slog.Debug("Long data - same as last")
 				d.xCoordinates = append(d.xCoordinates, xLast)
 			} else {
 				var x uint16
@@ -569,7 +569,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 				if err != nil {
 					return nil, err
 				}
-				logrus.Trace("Long data - x=%d", x)
+				slog.Debug("Long data - x=%d", x)
 				d.xCoordinates = append(d.xCoordinates, x)
 				xLast = x
 			}
@@ -577,7 +577,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 	}
 
 	// y coordinates.
-	logrus.Trace("Y Coordinates")
+	slog.Debug("Y Coordinates")
 	var yLast uint16
 	for _, flag := range d.flags {
 		sflag := simpleGlyphFlag(flag)
@@ -587,12 +587,12 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 			if err != nil {
 				return nil, err
 			}
-			logrus.Trace("Short data - y=%d", y)
+			slog.Debug("Short data - y=%d", y)
 			d.yCoordinates = append(d.yCoordinates, uint16(y))
 			yLast = uint16(y)
 		} else {
 			if sflag&yIsSameOrPositiveVector != 0 {
-				logrus.Trace("Long data - same as last")
+				slog.Debug("Long data - same as last")
 				d.yCoordinates = append(d.yCoordinates, yLast)
 			} else {
 				var y uint16
@@ -600,7 +600,7 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 				if err != nil {
 					return nil, err
 				}
-				logrus.Trace("Long data - y=%d", y)
+				slog.Debug("Long data - y=%d", y)
 				d.yCoordinates = append(d.yCoordinates, y)
 				yLast = y
 			}
@@ -612,11 +612,11 @@ func (f *font) parseSimpleGlyphDescription(r *byteReader, numContours int) (*sim
 
 func (d *simpleGlyphDescription) Write(w *byteWriter, f *font, numContours int) error {
 	if f == nil || f.loca == nil {
-		logrus.Debug("sgd: required field missing (write)")
+		slog.Debug("sgd: required field missing (write)")
 		return errRequiredField
 	}
 	if len(d.endPtsOfContours) != numContours {
-		logrus.Debugf("len(endPtsOfContours) != numContours (%d != %d)", len(d.endPtsOfContours), numContours)
+		slog.Debug(fmt.Sprintf("len(endPtsOfContours) != numContours (%d != %d)", len(d.endPtsOfContours), numContours)
 		return errRangeCheck
 	}
 
@@ -636,13 +636,13 @@ func (d *simpleGlyphDescription) Write(w *byteWriter, f *font, numContours int) 
 	}
 
 	if numContours > len(d.endPtsOfContours) {
-		logrus.Debugf("range check error (numContours)")
+		slog.Debug(fmt.Sprintf("range check error (numContours)")
 		return errRangeCheck
 	}
 
 	numPoints := int(d.endPtsOfContours[numContours-1]) + 1
 	if len(d.flags) != numPoints {
-		logrus.Debugf("#flags != #points (%d/%d)", len(d.flags), numPoints)
+		slog.Debug(fmt.Sprintf("#flags != #points (%d/%d)", len(d.flags), numPoints)
 		return errRangeCheck
 	}
 
@@ -872,13 +872,13 @@ func (f *font) parseCompositeGlyphDescription(r *byteReader, gdLen int64) (*comp
 	if instructionsFollow {
 		instructionLen := int64(gdLen) - len
 		if instructionLen < 0 {
-			logrus.Debug("Read more than length in loca table showed")
+			slog.Debug("Read more than length in loca table showed")
 			return nil, errors.New("read too far")
 		}
 
 		err := r.readSlice(&cgd.instructions, int(instructionLen))
 		if err != nil {
-			logrus.Debug("Failed to read instructions")
+			slog.Debug("Failed to read instructions")
 			return nil, err
 		}
 	}

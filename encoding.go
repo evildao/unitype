@@ -7,9 +7,9 @@ package unitype
 
 import (
 	"encoding/binary"
+	"fmt"
+	"log/slog"
 	"unicode/utf8"
-
-	"github.com/sirupsen/logrus"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
@@ -99,7 +99,7 @@ func getCmapEncoding(platformID, encodingID int) cmapEncoding {
 			return cmapEncodingUCS4
 		}
 	}
-	logrus.Debugf("Unsupported: PlatformID=%d, EncodingID=%d", platformID, encodingID)
+	slog.Debug(fmt.Sprintf("Unsupported: PlatformID=%d, EncodingID=%d", platformID, encodingID))
 
 	return cmapEncodingUnsupported
 }
@@ -148,7 +148,7 @@ func (e cmapEncoding) GetRuneDecoder() runeDecoder {
 	}
 
 	if d == nil {
-		logrus.Debugf("ERROR: Unsupported encoding (%d) - returning charcodes as runes", e)
+		slog.Debug(fmt.Sprintf("ERROR: Unsupported encoding (%d) - returning charcodes as runes", e))
 		d = unicode.UTF8.NewDecoder()
 		charcodeBytes = 1
 	}
@@ -177,7 +177,7 @@ func (d runeDecoder) ToBytes(charcode uint32) []byte {
 	case 4:
 		binary.BigEndian.PutUint32(b, charcode)
 	default:
-		logrus.Debugf("ERROR: Unsupported number of bytes per charcode: %d", d.charcodeBytes)
+		slog.Debug(fmt.Sprintf("ERROR: Unsupported number of bytes per charcode: %d", d.charcodeBytes))
 		return []byte{0}
 	}
 
@@ -189,7 +189,7 @@ func (d runeDecoder) DecodeRune(b []byte) rune {
 	// Get decoded bytes (the decoder decodes to UTF8 byte format).
 	decoded, err := d.Bytes(b)
 	if err != nil {
-		logrus.Debugf("Decoding error: %v", err)
+		slog.Debug(fmt.Sprintf("Decoding error: %v", err))
 	}
 
 	// TODO(gunnsth): Benchmark utf8.DecodeRune vs string().

@@ -6,7 +6,7 @@
 package unitype
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 type hmtxTable struct {
@@ -21,7 +21,7 @@ type longHorMetric struct {
 
 func (f *font) parseHmtx(r *byteReader) (*hmtxTable, error) {
 	if f.maxp == nil || f.hhea == nil {
-		logrus.Debug("maxp or hhea table missing")
+		slog.Debug("maxp or hhea table missing")
 		return nil, errRequiredField
 	}
 
@@ -30,7 +30,7 @@ func (f *font) parseHmtx(r *byteReader) (*hmtxTable, error) {
 		return nil, err
 	}
 	if !has {
-		logrus.Debug("hmtx table absent")
+		slog.Debug("hmtx table absent")
 		return nil, nil
 	}
 
